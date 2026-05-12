@@ -1,0 +1,10 @@
+import os
+
+class Config:
+    RABBITMQ_HOST = os.getenv('RABBITMQ_HOST')
+    RABBITMQ_PORT = int(os.getenv('RABBITMQ_PORT'))
+    RABBITMQ_USER = os.getenv('RABBITMQ_USER')
+    RABBITMQ_PASSWORD = os.getenv('RABBITMQ_PASSWORD')
+    RABBITMQ_QUEUE = os.getenv('RABBITMQ_QUEUE')
+    RABBITMQ_QUEUE2 = os.getenv('RABBITMQ_QUEUE2')
+    DB_CONNECTION_STRING = os.getenv('DB_CONNECTION_STRING')
