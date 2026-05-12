@@ -101,7 +101,7 @@ def start_recognition(image_blob: str, model: str, top_k: int, useCpu: bool):
     else:
         image_bytes = image_blob
 
-    logger.info(f"Параметры распознавания bytes.count: {image_bytes.count} model: {model} top_k: {top_k} useCpu: {useCpu}")
+    logger.info(f"Параметры распознавания bytes.count: {len(image_bytes)} model: {model} top_k: {top_k} useCpu: {useCpu}")
 
     # Определяем устройство
     if useCpu:

@@ -23,4 +23,4 @@ COPY __main__.py .
 RUN mkdir -p /app/data
 
 # Точка входа: запуск скрипта распознавания
-CMD ["watchmedo auto-restart --directory=. --pattern="*.py" --recursive --signal SIGTERM python __main__.py"]
+CMD ["watchmedo", "auto-restart", "--directory=.", "--pattern=*.py", "--recursive", "--signal", "SIGTERM", "python", "__main__.py"]

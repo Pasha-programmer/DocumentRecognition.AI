@@ -57,7 +57,7 @@ class RabbitMQConsumer:
             # Пытаемся распарсить JSON
             try:
                 message = json.loads(body)
-                logger.info(f"Получено сообщение (JSON)", message['Model'])
+                logger.info(f"Получено сообщение (JSON)")
             except json.JSONDecodeError:
                 # Если не JSON, обрабатываем как строку
                 message = body.decode('utf-8')
@@ -85,7 +85,7 @@ class RabbitMQConsumer:
                     "DocumentId": message['DocumentId'],
                     "Label": label,
                     "Probability": float(prob),
-                    "ModelType": modelName
+                    "ModelType": message['Model']
                 })
 
                 executeSqlCommand(f'''
@@ -95,6 +95,8 @@ class RabbitMQConsumer:
                 ''')
 
             response_payload = json.dumps(response_payload_list)
+
+            logger.info(response_payload)
 
             try:
                 self.publisher.connect()
