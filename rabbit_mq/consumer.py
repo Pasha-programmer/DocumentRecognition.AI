@@ -64,17 +64,20 @@ class RabbitMQConsumer:
                 logger.info(f"Получено сообщение (строка)")
 
             modelNames = {
-                "GlagoliticModelFullV1": "glagolitic_model_full",
-                "GlagoliticModelFullV2": "glagolitic_model_full_v2",
-                "GlagoliticModelFullV3": "glagolitic_model_full_v3"
+                "v1.1": "glagolitic_model_full_v1_1",
+                "v2.0": "glagolitic_model_full_v2_0",
+                "v2.1": "glagolitic_model_full_v2_1",
+                "v3.0": "glagolitic_model_full_v3_0",
             }
 
-            modelName = modelNames.get(message['Model'])
+            modelName = modelNames.get(message['AiModelType'])
+
+            logger.info(f"{message['AiModelType']} {modelName}")
 
             if (modelName == None):
                 raise Exception("Не удалось определить тип модели распознавания")
 
-            predictions = start_recognition(message['Blob'], "./" + modelName + ".pth", 3, True)
+            predictions = start_recognition(message['Blob'], "./aiModels/" + modelName + ".pth", 3, True)
 
             response_payload_list = []
 
@@ -85,13 +88,13 @@ class RabbitMQConsumer:
                     "DocumentId": message['DocumentId'],
                     "Label": label,
                     "Probability": float(prob),
-                    "ModelType": message['Model']
+                    "ModelType": message['AiModelType']
                 })
 
                 executeSqlCommand(f'''
                     INSERT INTO DocumentPrediction
                     (DocumentId, ModelType, Label, Prob)
-                    VALUES({message['DocumentId']}, '{message['Model']}', '{label}', {float_prob});
+                    VALUES({message['DocumentId']}, '{message['AiModelType']}', '{label}', {float_prob});
                 ''')
 
             response_payload = json.dumps(response_payload_list)
