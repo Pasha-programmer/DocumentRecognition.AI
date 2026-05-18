@@ -15,9 +15,10 @@ COPY src/. ./src/
 COPY ocr/. ./ocr/
 COPY database/. ./database/
 COPY rabbit_mq/. ./rabbit_mq/
-COPY glagolitic_model_full.pth .
-COPY glagolitic_model_full_v2.pth .
-COPY glagolitic_model_full_v3.pth .
+COPY aiModels/glagolitic_model_full_v1_1.pth ./aiModels/
+COPY aiModels/glagolitic_model_full_v2_1.pth ./aiModels/
+COPY aiModels/glagolitic_model_full_v2_1.pth ./aiModels/
+COPY aiModels/glagolitic_model_full_v3_0.pth ./aiModels/
 COPY __main__.py .
 
 RUN mkdir -p /app/data

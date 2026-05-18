@@ -63,39 +63,47 @@ class RabbitMQConsumer:
                 message = body.decode('utf-8')
                 logger.info(f"Получено сообщение (строка)")
 
-            modelNames = {
+            modelNamesMap = {
                 "v1.1": "glagolitic_model_full_v1_1",
                 "v2.0": "glagolitic_model_full_v2_0",
                 "v2.1": "glagolitic_model_full_v2_1",
                 "v3.0": "glagolitic_model_full_v3_0",
             }
 
-            modelName = modelNames.get(message['AiModelType'])
+            modelNames = []
 
-            logger.info(f"{message['AiModelType']} {modelName}")
+            if (message['AiModelType'] != "All"):
+                modelTypeName = modelNamesMap.get(message['AiModelType'])
 
-            if (modelName == None):
-                raise Exception("Не удалось определить тип модели распознавания")
-
-            predictions = start_recognition(message['Blob'], "./aiModels/" + modelName + ".pth", 3, True)
+                if (modelTypeName == None):
+                    raise Exception("Не удалось определить тип модели распознавания")
+                
+                modelNames.append(modelTypeName)
+            else: 
+                for modelTypeName in modelNamesMap.values():
+                    modelNames.append(modelTypeName)
 
             response_payload_list = []
 
-            for i, (label, prob) in enumerate(predictions):
-                float_prob = float(prob)
+            for modelName in modelNames:
+                predictions = start_recognition(message['Blob'], "./aiModels/" + modelName + ".pth", 3, False)
 
-                response_payload_list.append({
-                    "DocumentId": message['DocumentId'],
-                    "Label": label,
-                    "Probability": float(prob),
-                    "ModelType": message['AiModelType']
-                })
+                for i, (label, prob) in enumerate(predictions):
+                    float_prob = float(prob)
+                    modelTypeKey = next((k for k, v in modelNamesMap.items() if v == modelName), None)
 
-                executeSqlCommand(f'''
-                    INSERT INTO DocumentPrediction
-                    (DocumentId, ModelType, Label, Prob)
-                    VALUES({message['DocumentId']}, '{message['AiModelType']}', '{label}', {float_prob});
-                ''')
+                    response_payload_list.append({
+                        "DocumentId": message['DocumentId'],
+                        "Label": label,
+                        "Probability": float(prob),
+                        "ModelType": modelTypeKey
+                    })
+
+                    executeSqlCommand(f'''
+                        INSERT INTO DocumentPrediction
+                        (DocumentId, ModelType, Label, Prob)
+                        VALUES({message['DocumentId']}, '{modelTypeKey}', '{label}', {float_prob});
+                    ''')
 
             response_payload = json.dumps(response_payload_list)
 
