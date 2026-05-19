@@ -67,6 +67,7 @@ class RabbitMQConsumer:
                 "v1.1": "glagolitic_model_full_v1_1",
                 "v2.0": "glagolitic_model_full_v2_0",
                 "v2.1": "glagolitic_model_full_v2_1",
+                "v2.2": "glagolitic_model_full_v2_2",
                 "v3.0": "glagolitic_model_full_v3_0",
             }
 
