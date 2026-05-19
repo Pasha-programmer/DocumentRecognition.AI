@@ -69,6 +69,7 @@ class RabbitMQConsumer:
                 "v2.1": "glagolitic_model_full_v2_1",
                 "v2.2": "glagolitic_model_full_v2_2",
                 "v3.0": "glagolitic_model_full_v3_0",
+                "v4.0": "glagolitic_model_full_v4_0",
             }
 
             modelNames = []
