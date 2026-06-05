@@ -37,13 +37,13 @@ class RabbitMQPublisher:
             
             # Объявляем очередь (создаем если не существует)
             self.channel.queue_declare(
-                queue=self.config.RABBITMQ_QUEUE2,
+                queue=self.config.RABBITMQ_QUEUE_RECOGNITION_RESULTS,
                 durable=True,  # Очередь сохранится после перезапуска
                 exclusive=False,
                 auto_delete=False
             )
             
-            logger.info(f"Успешно подключились к RabbitMQ. Очередь: {self.config.RABBITMQ_QUEUE2}")
+            logger.info(f"Успешно подключились к RabbitMQ. Очередь: {self.config.RABBITMQ_QUEUE_RECOGNITION_RESULTS}")
             
         except Exception as e:
             logger.error(f"Ошибка подключения к RabbitMQ: {e}")
@@ -94,7 +94,7 @@ class RabbitMQPublisher:
             # Публикуем сообщение
             self.channel.basic_publish(
                 exchange="",
-                routing_key=self.config.RABBITMQ_QUEUE2,
+                routing_key=self.config.RABBITMQ_QUEUE_RECOGNITION_RESULTS,
                 body=body.encode('utf-8'),
                 properties=pika.BasicProperties(**properties)
             )

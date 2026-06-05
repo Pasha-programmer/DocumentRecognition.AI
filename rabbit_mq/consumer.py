@@ -6,12 +6,23 @@ from database.sqlite import executeSqlCommand
 from rabbit_mq.publisher import RabbitMQPublisher
 from src.config import Config
 from ocr.recognition import start_recognition
+from ocr.tune import tune_model 
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 class RabbitMQConsumer:
+
+    modelNamesMap = {
+        "v1.1": "glagolitic_model_full_v1_1",
+        "v2.0": "glagolitic_model_full_v2_0",
+        "v2.1": "glagolitic_model_full_v2_1",
+        "v2.2": "glagolitic_model_full_v2_2",
+        "v3.0": "glagolitic_model_full_v3_0",
+        "v4.0": "glagolitic_model_full_v4_0",
+    }
+
     def __init__(self):
 
         self.config = Config()
@@ -43,15 +54,15 @@ class RabbitMQConsumer:
             self.channel = self.connection.channel()
             
             # Объявляем очередь (на случай, если она еще не создана)
-            self.channel.queue_declare(queue=self.config.RABBITMQ_QUEUE, durable=True)
+            self.channel.queue_declare(queue=self.config.RABBITMQ_QUEUE_RECOGNITION_REQUEST, durable=True)
             
-            logger.info(f"Успешно подключились к RabbitMQ. Очередь: {self.config.RABBITMQ_QUEUE}")
+            logger.info(f"Успешно подключились к RabbitMQ. Очередь: {self.config.RABBITMQ_QUEUE_RECOGNITION_REQUEST}")
             
         except Exception as e:
             logger.error(f"Ошибка подключения к RabbitMQ: {e}")
             raise
     
-    def process_message(self, ch, method, properties, body):
+    def process_recognition_request_message(self, ch, method, properties, body):
         """Обработка полученного сообщения"""
         try:
             # Пытаемся распарсить JSON
@@ -63,27 +74,7 @@ class RabbitMQConsumer:
                 message = body.decode('utf-8')
                 logger.info(f"Получено сообщение (строка)")
 
-            modelNamesMap = {
-                "v1.1": "glagolitic_model_full_v1_1",
-                "v2.0": "glagolitic_model_full_v2_0",
-                "v2.1": "glagolitic_model_full_v2_1",
-                "v2.2": "glagolitic_model_full_v2_2",
-                "v3.0": "glagolitic_model_full_v3_0",
-                "v4.0": "glagolitic_model_full_v4_0",
-            }
-
-            modelNames = []
-
-            if (message['AiModelType'] != "All"):
-                modelTypeName = modelNamesMap.get(message['AiModelType'])
-
-                if (modelTypeName == None):
-                    raise Exception("Не удалось определить тип модели распознавания")
-                
-                modelNames.append(modelTypeName)
-            else: 
-                for modelTypeName in modelNamesMap.values():
-                    modelNames.append(modelTypeName)
+            modelNames = self.getAiModelFileNames(message['AiModelType'])
 
             response_payload_list = []
 
@@ -92,7 +83,7 @@ class RabbitMQConsumer:
 
                 for i, (label, prob) in enumerate(predictions):
                     float_prob = float(prob)
-                    modelTypeKey = next((k for k, v in modelNamesMap.items() if v == modelName), None)
+                    modelTypeKey = next((k for k, v in self.modelNamesMap.items() if v == modelName), None)
 
                     response_payload_list.append({
                         "DocumentId": message['DocumentId'],
@@ -128,6 +119,31 @@ class RabbitMQConsumer:
             logger.error(f"Ошибка при обработке сообщения: {e}")
             # Отклоняем сообщение и не возвращаем в очередь
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+
+    def process_tune_request_message(self, ch, method, properties, body):
+        """Обработка полученного сообщения"""
+        try:
+            # Пытаемся распарсить JSON
+            try:
+                message = json.loads(body)
+                logger.info(f"Получено сообщение (JSON)")
+            except json.JSONDecodeError:
+                # Если не JSON, обрабатываем как строку
+                message = body.decode('utf-8')
+                logger.info(f"Получено сообщение (строка)")
+
+            modelNames = self.getAiModelFileNames(message['AiModelType'])
+
+            for modelName in modelNames:
+                tune_model(message['RootDir'], 
+                           message['NewDataFileName'], 
+                           "./aiModels/" + modelName + ".pth",
+                           "./aiModels/" + modelName + "_tunned.pth")
+            
+        except Exception as e:
+            logger.error(f"Ошибка при обработке сообщения: {e}")
+            # Отклоняем сообщение и не возвращаем в очередь
+            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
     
     def consume(self):
         """Запуск consumer'а"""
@@ -141,11 +157,16 @@ class RabbitMQConsumer:
                 
                 # Подписываемся на очередь
                 self.channel.basic_consume(
-                    queue=self.config.RABBITMQ_QUEUE,
-                    on_message_callback=self.process_message
+                    queue=self.config.RABBITMQ_QUEUE_RECOGNITION_REQUEST,
+                    on_message_callback=self.process_recognition_request_message
+                )
+
+                self.channel.basic_consume(
+                    queue=self.config.RABBITMQ_QUEUE_TUNE_REQUEST,
+                    on_message_callback=self.process_tune_request_message
                 )
                 
-                logger.info(f"Ожидание сообщений в очереди {self.config.RABBITMQ_QUEUE}. Для выхода нажмите CTRL+C")
+                logger.info(f"Ожидание сообщений в очереди {self.config.RABBITMQ_QUEUE_RECOGNITION_REQUEST}. Для выхода нажмите CTRL+C")
                 
                 # Запускаем цикл получения сообщений
                 self.channel.start_consuming()
@@ -156,6 +177,22 @@ class RabbitMQConsumer:
             except Exception as e:
                 logger.error(f"Ошибка в процессе потребления: {e}")
                 self.stop()
+
+    def getAiModelFileNames(self, aiModelType):
+        modelNames = []
+
+        if (aiModelType != "All"):
+            modelTypeName = self.modelNamesMap.get(aiModelType)
+
+            if (modelTypeName == None):
+                raise Exception("Не удалось определить тип модели распознавания")
+            
+            modelNames.append(modelTypeName)
+        else: 
+            for modelTypeName in self.modelNamesMap.values():
+                modelNames.append(modelTypeName)
+
+        return modelNames
     
     def stop(self):
         """Остановка consumer'а и закрытие соединения"""
