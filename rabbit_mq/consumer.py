@@ -14,13 +14,22 @@ logger = logging.getLogger(__name__)
 
 class RabbitMQConsumer:
 
-    modelNamesMap = {
+    aiModelNamesMap = {
         "v1.1": "glagolitic_model_full_v1_1",
         "v2.0": "glagolitic_model_full_v2_0",
         "v2.1": "glagolitic_model_full_v2_1",
         "v2.2": "glagolitic_model_full_v2_2",
         "v3.0": "glagolitic_model_full_v3_0",
         "v4.0": "glagolitic_model_full_v4_0",
+    }
+
+    aiTunedModelNamesMap = {
+        "v1.1": "glagolitic_model_full_v1_1_tuned",
+        "v2.0": "glagolitic_model_full_v2_0_tuned",
+        "v2.1": "glagolitic_model_full_v2_1_tuned",
+        "v2.2": "glagolitic_model_full_v2_2_tuned",
+        "v3.0": "glagolitic_model_full_v3_0_tuned",
+        "v4.0": "glagolitic_model_full_v4_0_tuned",
     }
 
     def __init__(self):
@@ -83,13 +92,14 @@ class RabbitMQConsumer:
 
                 for i, (label, prob) in enumerate(predictions):
                     float_prob = float(prob)
-                    modelTypeKey = next((k for k, v in self.modelNamesMap.items() if v == modelName), None)
+                    modelTypeKey = next((k for k, v in self.aiModelNamesMap.items() if v == modelName), None)
 
                     response_payload_list.append({
                         "DocumentId": message['DocumentId'],
                         "Label": label,
                         "Probability": float(prob),
-                        "ModelType": modelTypeKey
+                        "ModelType": modelTypeKey,
+                        "RecognitionType": "Auto"
                     })
 
                     executeSqlCommand(f'''
@@ -138,7 +148,7 @@ class RabbitMQConsumer:
                 tune_model(message['RootDir'], 
                            message['NewDataFileName'], 
                            "./aiModels/" + modelName + ".pth",
-                           "./aiModels/" + modelName + "_tunned.pth")
+                           "./aiModels/" + modelName + "_tuned.pth")
             
         except Exception as e:
             logger.error(f"Ошибка при обработке сообщения: {e}")
@@ -178,19 +188,20 @@ class RabbitMQConsumer:
                 logger.error(f"Ошибка в процессе потребления: {e}")
                 self.stop()
 
-    def getAiModelFileNames(self, aiModelType):
+    def getAiModelFileNames(self, aiModelType: str):
         modelNames = []
 
         if (aiModelType != "All"):
-            modelTypeName = self.modelNamesMap.get(aiModelType)
+            modelTypeName = self.aiModelNamesMap.get(aiModelType)
 
             if (modelTypeName == None):
                 raise Exception("Не удалось определить тип модели распознавания")
             
             modelNames.append(modelTypeName)
-        else: 
-            for modelTypeName in self.modelNamesMap.values():
-                modelNames.append(modelTypeName)
+            return modelNames
+
+        for modelTypeName in self.aiModelNamesMap.values():
+            modelNames.append(modelTypeName)
 
         return modelNames
     
