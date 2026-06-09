@@ -12,19 +12,20 @@ logger = logging.getLogger(__name__)
 
 # Dataset, Трансформации и DataLoader
 class GlagoliticDataset(Dataset):
-    def __init__(self, samples, transform=None):
+    def __init__(self, samples, img_size=224, transform=None):
         self.samples = samples
+        self.img_size = img_size
         self.transform = transform
 
     def __len__(self):
         return len(self.samples)
 
-    def __getitem__(self, idx, img_size):
+    def __getitem__(self, idx):
         path, label = self.samples[idx]
         try:
             image = Image.open(path).convert('RGB')
         except Exception as e:
-            image = Image.new('RGB', (img_size, img_size), color='black')
+            image = Image.new('RGB', (self.img_size, self.img_size), color='black')
         if self.transform:
             image = self.transform(image)
         return image, label
@@ -42,7 +43,7 @@ def rebuild_model(num_classes):
 
 # Подготовка новых данных (используя старый маппинг классов)
 def parse_new_dataset(csv_path, root_dir, label_to_idx):
-    df = pd.read_csv(csv_path, header=None, names=["paths", "label"])
+    df = pd.read_csv(csv_path, header=None, names=["paths", "label"], delimiter=';')
     samples = []
     for _, row in df.iterrows():
         label = row["label"]
@@ -70,8 +71,8 @@ def parse_new_dataset(csv_path, root_dir, label_to_idx):
 # checkpoint_file_name - Путь к сохраненной модели
 # new_checkpoint_file_name - Имя для нового чекпоинта
 def tune_model(root_dir, new_data_file_name, checkpoint_file_path, new_checkpoint_file_path):
-    # new_data_file_name = "/content/drive/MyDrive/SlavonicRecognition/NewMap.csv"  # Новый CSV-файл с данными
     # root_dir = "/content/drive/MyDrive/SlavonicRecognition/train_v2_2"
+    # new_data_file_name = "/content/drive/MyDrive/SlavonicRecognition/NewMap.csv"  # Новый CSV-файл с данными
     # checkpoint_file_name = "glagolitic_model_full.pth"  # Путь к вашей сохраненной модели
     # new_checkpoint_file_name = "glagolitic_model_tuned.pth" # Имя для нового чекпоинта
 
@@ -117,7 +118,7 @@ def tune_model(root_dir, new_data_file_name, checkpoint_file_path, new_checkpoin
         transforms.Normalize(mean, std)
     ])
 
-    train_dataset = GlagoliticDataset(new_samples, transform=fine_tune_transform)
+    train_dataset = GlagoliticDataset(new_samples, img_size=img_size, transform=fine_tune_transform)
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=2, pin_memory=True)
 
     # ---------------------------

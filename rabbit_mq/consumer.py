@@ -64,8 +64,10 @@ class RabbitMQConsumer:
             
             # Объявляем очередь (на случай, если она еще не создана)
             self.channel.queue_declare(queue=self.config.RABBITMQ_QUEUE_RECOGNITION_REQUEST, durable=True)
-            
             logger.info(f"Успешно подключились к RabbitMQ. Очередь: {self.config.RABBITMQ_QUEUE_RECOGNITION_REQUEST}")
+            
+            self.channel.queue_declare(queue=self.config.RABBITMQ_QUEUE_TUNE_REQUEST, durable=True)
+            logger.info(f"Успешно подключились к RabbitMQ. Очередь: {self.config.RABBITMQ_QUEUE_TUNE_REQUEST}")
             
         except Exception as e:
             logger.error(f"Ошибка подключения к RabbitMQ: {e}")
@@ -83,16 +85,21 @@ class RabbitMQConsumer:
                 message = body.decode('utf-8')
                 logger.info(f"Получено сообщение (строка)")
 
-            modelNames = self.getAiModelFileNames(message['AiModelType'])
+            modelNames = self.getAiModelFileNames(message['AiModelType'], message['UseTunedModels'])
 
             response_payload_list = []
 
+            aiModelNamesMap = self.aiModelNamesMap
+            if message['UseTunedModels']:
+                aiModelNamesMap = self.aiTunedModelNamesMap
+
             for modelName in modelNames:
+                logger.info(modelName)
                 predictions = start_recognition(message['Blob'], "./aiModels/" + modelName + ".pth", 3, False)
 
                 for i, (label, prob) in enumerate(predictions):
                     float_prob = float(prob)
-                    modelTypeKey = next((k for k, v in self.aiModelNamesMap.items() if v == modelName), None)
+                    modelTypeKey = next((k for k, v in aiModelNamesMap.items() if v == modelName), None)
 
                     response_payload_list.append({
                         "DocumentId": message['DocumentId'],
@@ -142,13 +149,13 @@ class RabbitMQConsumer:
                 message = body.decode('utf-8')
                 logger.info(f"Получено сообщение (строка)")
 
-            modelNames = self.getAiModelFileNames(message['AiModelType'])
+            modelNames = self.getAiModelFileNames(message['AiModelType'], True)
 
             for modelName in modelNames:
-                tune_model(message['RootDir'], 
+                tune_model(message['FoldersDir'], 
                            message['NewDataFileName'], 
                            "./aiModels/" + modelName + ".pth",
-                           "./aiModels/" + modelName + "_tuned.pth")
+                           "./aiModels/" + modelName + ".pth")
             
         except Exception as e:
             logger.error(f"Ошибка при обработке сообщения: {e}")
@@ -170,13 +177,13 @@ class RabbitMQConsumer:
                     queue=self.config.RABBITMQ_QUEUE_RECOGNITION_REQUEST,
                     on_message_callback=self.process_recognition_request_message
                 )
+                logger.info(f"Успешно подписан на ${self.config.RABBITMQ_QUEUE_RECOGNITION_REQUEST}")
 
                 self.channel.basic_consume(
                     queue=self.config.RABBITMQ_QUEUE_TUNE_REQUEST,
                     on_message_callback=self.process_tune_request_message
                 )
-                
-                logger.info(f"Ожидание сообщений в очереди {self.config.RABBITMQ_QUEUE_RECOGNITION_REQUEST}. Для выхода нажмите CTRL+C")
+                logger.info(f"Успешно подписан на ${self.config.RABBITMQ_QUEUE_TUNE_REQUEST}")
                 
                 # Запускаем цикл получения сообщений
                 self.channel.start_consuming()
@@ -188,11 +195,15 @@ class RabbitMQConsumer:
                 logger.error(f"Ошибка в процессе потребления: {e}")
                 self.stop()
 
-    def getAiModelFileNames(self, aiModelType: str):
+    def getAiModelFileNames(self, aiModelType: str, useTunedModels: bool):
         modelNames = []
 
+        aiModelNamesMap = self.aiModelNamesMap
+        if useTunedModels:
+            aiModelNamesMap = self.aiTunedModelNamesMap
+
         if (aiModelType != "All"):
-            modelTypeName = self.aiModelNamesMap.get(aiModelType)
+            modelTypeName = aiModelNamesMap.get(aiModelType)
 
             if (modelTypeName == None):
                 raise Exception("Не удалось определить тип модели распознавания")
@@ -200,7 +211,7 @@ class RabbitMQConsumer:
             modelNames.append(modelTypeName)
             return modelNames
 
-        for modelTypeName in self.aiModelNamesMap.values():
+        for modelTypeName in aiModelNamesMap.values():
             modelNames.append(modelTypeName)
 
         return modelNames
